@@ -11,7 +11,6 @@ from aiogram.filters import Command, CommandObject
 from aiohttp import web
 
 # --- НАСТРОЙКИ ---
-# --- НАСТРОЙКИ ---
 logging.basicConfig(level=logging.INFO)
 TOKEN = os.getenv("BOT_TOKEN")
 PUBLISH_CHANNEL = "@dnipro1777" 
@@ -21,7 +20,7 @@ bot = Bot(token=TOKEN)
 dp = Dispatcher()
 DB_FILE = "database_ru.json"
 
-# ОБЯЗАТЕЛЬНО: Проверь, чтобы название было FOOTER_TEXT
+# Подпись для постов
 FOOTER_TEXT = "\n\n<b><a href='https://t.me/Info114Pod'>ℹ️ Инфо</a> | <a href='https://t.me/+W65-IzDXhT85ZTky'>💬 Чат</a> | <a href='https://t.me/shkola_114_bot'>🤖 Предложка</a> | <a href='https://t.me/Per114Pod'>🔗 Переходник</a></b>"
 
 # --- РАБОТА С БД ---
@@ -227,7 +226,7 @@ async def main_handler(message: types.Message):
         await message.answer("🚀 Доставлено поддержке!", reply_markup=get_main_kb())
         db["states"].pop(uid); save_db(db)
 
-# --- МОДЕРАЦИЯ (СИНХРОНИЗАЦИЯ АДМИНОВ) ---
+# --- МОДЕРАЦИЯ (ИСПРАВЛЕНО!) ---
 @dp.callback_query(F.data.startswith("p_"))
 async def process_post(call: types.CallbackQuery):
     _, act, p_id = call.data.split("_")
@@ -236,12 +235,13 @@ async def process_post(call: types.CallbackQuery):
     post = db["posts"][p_idx]
     
     if act == "acc":
+        caption_full = f"{post['text']}{FOOTER_TEXT}"
         if post["file_type"] == "photo": 
-            await bot.send_photo(PUBLISH_CHANNEL, post["file_id"], caption=f"{post['text']}{FOOTER_TEXT}", parse_mode="HTML")
+            await bot.send_photo(PUBLISH_CHANNEL, post["file_id"], caption=caption_full, parse_mode="HTML")
         elif post["file_type"] == "video": 
-            await bot.send_video(PUBLISH_CHANNEL, post["file_id"], caption=f"{post['text']}{FOOTER_TEXT}", parse_mode="HTML")
+            await bot.send_video(PUBLISH_CHANNEL, post["file_id"], caption=caption_full, parse_mode="HTML")
         else: 
-            await bot.send_message(PUBLISH_CHANNEL, f"{post['text']}{FOOTER_TEXT}", parse_mode="HTML", disable_web_page_preview=True)
+            await bot.send_message(PUBLISH_CHANNEL, caption_full, parse_mode="HTML", disable_web_page_preview=True)
         
         await bot.send_message(int(post["user_id"]), "🌟 Твой пост опубликован!")
         res_text = "✅ Одобрено"
@@ -249,7 +249,6 @@ async def process_post(call: types.CallbackQuery):
         await bot.send_message(int(post["user_id"]), "❌ Пост отклонен модерацией.")
         res_text = "❌ Отклонено"
 
-    # Удаление кнопок у всех админов сразу
     for m in post["admin_msgs"]:
         try: await bot.edit_message_reply_markup(chat_id=m["chat_id"], message_id=m["msg_id"], reply_markup=None)
         except: pass
