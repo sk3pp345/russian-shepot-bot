@@ -11,6 +11,7 @@ from aiogram.filters import Command, CommandObject
 from aiohttp import web
 
 # --- НАСТРОЙКИ ---
+# --- НАСТРОЙКИ ---
 logging.basicConfig(level=logging.INFO)
 TOKEN = os.getenv("BOT_TOKEN")
 PUBLISH_CHANNEL = "@dnipro1777" 
@@ -20,7 +21,7 @@ bot = Bot(token=TOKEN)
 dp = Dispatcher()
 DB_FILE = "database_ru.json"
 
-# Подпись, которая будет добавляться к каждому посту
+# ОБЯЗАТЕЛЬНО: Проверь, чтобы название было FOOTER_TEXT
 FOOTER_TEXT = "\n\n<b><a href='https://t.me/Info114Pod'>ℹ️ Инфо</a> | <a href='https://t.me/+W65-IzDXhT85ZTky'>💬 Чат</a> | <a href='https://t.me/shkola_114_bot'>🤖 Предложка</a> | <a href='https://t.me/Per114Pod'>🔗 Переходник</a></b>"
 
 # --- РАБОТА С БД ---
