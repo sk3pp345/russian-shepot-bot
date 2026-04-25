@@ -14,13 +14,13 @@ from aiohttp import web
 logging.basicConfig(level=logging.INFO)
 TOKEN = os.getenv("BOT_TOKEN")
 PUBLISH_CHANNEL = "@shepotrussia" 
-ADMINS = [1252647696, 5028188335] 
+ADMINS = [1252647696] 
 
 bot = Bot(token=TOKEN)
 dp = Dispatcher()
 DB_FILE = "database_ru.json"
 
-FOOTER_TEXT = "\n\n<b><a href='https://t.me/shepotrussiabot'>Предложка (@shepotrussiabot)</a>\n<a href='https://t.me/shepotrussia'>Шёпот России (t.me/shepotrussia)</a>\n<a href='https://t.me/shepotrussiachat'>Чат</a></b>"
+FOOTER_TEXT = "\n\n<b><a href='https://t.me/shepotrussiabot'>Предложка </a>\n<a href='https://t.me/shepotrussia'>Шёпот России </a>\n<a href='https://t.me/shepotrussiachat'>Чат</a></b>"
 
 # --- РАБОТА С БД ---
 def load_db():
@@ -72,7 +72,7 @@ async def cmd_admins(message: types.Message):
         "<b>/send текст</b> — Рассылка сообщения всем юзерам\n"
         "<b>/history @user</b> — Все ID постов и ID самого юзера\n"
         "<b>/check ID</b> — Посмотреть пост (текст + медиа)\n\n"
-        "<i>Администраторы: @sk3pp345, @ada_dev</i>"
+        "<i>Администраторы: @sk3ppt</i>"
     )
     await message.answer(admin_text, parse_mode="HTML")
 
