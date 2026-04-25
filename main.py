@@ -13,14 +13,14 @@ from aiohttp import web
 # --- НАСТРОЙКИ ---
 logging.basicConfig(level=logging.INFO)
 TOKEN = os.getenv("BOT_TOKEN")
-PUBLISH_CHANNEL = "@shepotrussia" 
-ADMINS = [1252647696] 
+PUBLISH_CHANNEL = "@dnipro1777" 
+ADMINS = [1252647696, 5028188335] 
 
 bot = Bot(token=TOKEN)
 dp = Dispatcher()
 DB_FILE = "database_ru.json"
 
-FOOTER_TEXT = "\n\n<b><a href='https://t.me/shepotrussiabot'>Предложка </a>\n<a href='https://t.me/shepotrussia'>Шёпот России </a>\n<a href='https://t.me/shepotrussiachat'>Чат</a></b>"
+LINKS_TEXT = "\n\n<b><a href='https://t.me/Info114Pod'>ℹ️ Инфо</a> | <a href='https://t.me/+W65-IzDXhT85ZTky'>💬 Чат</a> | <a href='https://t.me/shkola_114_bot'>🤖 Предложка</a> | <a href='https://t.me/Per114Pod'>🔗 Переходник</a></b>"
 
 # --- РАБОТА С БД ---
 def load_db():
