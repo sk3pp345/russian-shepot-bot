@@ -21,7 +21,7 @@ dp = Dispatcher()
 DB_FILE = "database_ru.json"
 
 # Синий текст под постами
-FOOTER_TEXT = "\n\n<b><a href='https://t.me/shepotrussiabot'>Предложка (@shepotrussiabot)</a>\n<a href='https://t.me/shepotrussia'>Шёпот России (t.me/shepotrussia)</a>\n<a href='https://t.me/+SSbibEaewjZiMGQy'>Чат (t.me/chat)</a></b>"
+FOOTER_TEXT = "\n\n<b><a href='https://t.me/shepotrussiabot'>Предложка (@shepotrussiabot)</a>\n<a href='https://t.me/shepotrussia'>Шёпот России (t.me/shepotrussia)</a>\n<a href='https://t.me/+SSbibEaewjZiMGQy'>Чат</a></b>"
 
 # --- РАБОТА С БД ---
 def load_db():
@@ -65,6 +65,10 @@ async def cmd_start(message: types.Message):
     await message.answer(f"Привет! Это <b>Шёпот России</b> 🤫\n\nВыбери нужное действие в меню ниже:", 
                          reply_markup=get_main_kb(), parse_mode="HTML")
 
+@dp.message(Command("admins"))
+async def cmd_admins(message: types.Message):
+    await message.answer("🛠 <b>Администрация проекта:</b>\n\n• @sk3pp345\n• @ada_dev\n\nПо вопросам сотрудничества пишите в поддержку!", parse_mode="HTML")
+
 # --- МАГАЗИН ---
 @dp.message(F.text == "💎 Магазин")
 async def action_shop(message: types.Message):
@@ -81,23 +85,23 @@ async def shop_categories(call: types.CallbackQuery):
     cat = call.data.split("_")[1]
     if cat == "ban":
         kb = InlineKeyboardMarkup(inline_keyboard=[
-            [InlineKeyboardButton(text="🔓 Разбан — 50 ⭐", callback_data="buy_unban_50")],
-            [InlineKeyboardButton(text="🔇 Размут — 25 ⭐", callback_data="buy_unmute_25")],
+            [InlineKeyboardButton(text="🔓 Разбан — 50 ⭐", callback_data="buy_Разбан_50")],
+            [InlineKeyboardButton(text="🔇 Размут — 25 ⭐", callback_data="buy_Размут_25")],
             [InlineKeyboardButton(text="⬅️ Назад", callback_data="back_to_shop")]
         ])
         await call.message.edit_text("🔓 <b>Категория: Разбан</b>", reply_markup=kb, parse_mode="HTML")
     elif cat == "serv":
         kb = InlineKeyboardMarkup(inline_keyboard=[
-            [InlineKeyboardButton(text="🎭 Префикс — 100 ⭐", callback_data="buy_prefix_100")],
-            [InlineKeyboardButton(text="🔨 Бан (1д) — 200 ⭐", callback_data="buy_ban1d_200")],
-            [InlineKeyboardButton(text="🔇 Мут (1д) — 100 ⭐", callback_data="buy_mute1d_100")],
+            [InlineKeyboardButton(text="🎭 Префикс — 100 ⭐", callback_data="buy_Префикс_100")],
+            [InlineKeyboardButton(text="🔨 Бан (1д) — 200 ⭐", callback_data="buy_Бан-1д_200")],
+            [InlineKeyboardButton(text="🔇 Мут (1д) — 100 ⭐", callback_data="buy_Мут-1д_100")],
             [InlineKeyboardButton(text="⬅️ Назад", callback_data="back_to_shop")]
         ])
         await call.message.edit_text("🛠 <b>Категория: Услуги</b>", reply_markup=kb, parse_mode="HTML")
     elif cat == "ads":
         kb = InlineKeyboardMarkup(inline_keyboard=[
-            [InlineKeyboardButton(text="📌 Закреп (1д) — 75 ⭐", callback_data="buy_pin_75")],
-            [InlineKeyboardButton(text="📢 Рекламный пост — 50 ⭐", callback_data="buy_adpost_50")],
+            [InlineKeyboardButton(text="📌 Закреп (1д) — 75 ⭐", callback_data="buy_Закреп_75")],
+            [InlineKeyboardButton(text="📢 Рекламный пост — 50 ⭐", callback_data="buy_Реклама_50")],
             [InlineKeyboardButton(text="⬅️ Назад", callback_data="back_to_shop")]
         ])
         await call.message.edit_text("📢 <b>Категория: Реклама</b>", reply_markup=kb, parse_mode="HTML")
@@ -105,10 +109,26 @@ async def shop_categories(call: types.CallbackQuery):
 @dp.callback_query(F.data == "back_to_shop")
 async def back_to_shop(call: types.CallbackQuery): await action_shop(call.message)
 
-@dp.callback_query(F.data == "buy_") # Логика оплаты как в прошлых версиях
+@dp.callback_query(F.data.startswith("buy_"))
 async def process_buy(call: types.CallbackQuery):
-    # Код оплаты Stars (XTR) здесь
-    pass
+    _, item_name, price = call.data.split("_")
+    prices = [LabeledPrice(label=item_name, amount=int(price))]
+    await bot.send_invoice(
+        call.from_user.id, title=f"Покупка: {item_name}", 
+        description=f"Оплата товара '{item_name}' через Telegram Stars",
+        payload=f"pay_{item_name}", currency="XTR", prices=prices
+    )
+    await call.answer()
+
+@dp.pre_checkout_query()
+async def process_pre_checkout(query: PreCheckoutQuery):
+    await bot.answer_pre_checkout_query(query.id, ok=True)
+
+@dp.message(F.content_type == ContentType.SUCCESSFUL_PAYMENT)
+async def success_payment(message: types.Message):
+    await message.answer("✅ Оплата прошла успешно! Администраторы свяжутся с вами для активации услуги.")
+    for aid in ADMINS:
+        await bot.send_message(aid, f"💰 <b>НОВАЯ ОПЛАТА</b>\nЮзер: @{message.from_user.username}\nТовар: {message.successful_payment.invoice_payload}")
 
 # --- ПРЕДЛОЖКА И ПОДДЕРЖКА ---
 @dp.message(F.text.in_(["📝 Предложить пост", "🆘 Поддержка"]))
@@ -134,20 +154,30 @@ async def main_handler(message: types.Message):
     db = load_db()
     state = db["states"].get(uid)
 
-    # 1. Распознавание пересланного поста из канала (для админа)
+    # 1. Ответ админа юзеру (логика поддержки)
+    if state and state.startswith("rep_to_"):
+        target_id = state.split("_")[2]
+        try:
+            if message.photo: await bot.send_photo(target_id, message.photo[-1].file_id, caption=f"✉️ <b>Ответ от поддержки:</b>\n\n{message.caption or ''}", parse_mode="HTML")
+            else: await bot.send_message(target_id, f"✉️ <b>Ответ от поддержки:</b>\n\n{message.text}", parse_mode="HTML")
+            await message.answer("✅ Сообщение доставлено пользователю!")
+        except: await message.answer("❌ Не удалось отправить (юзер заблокировал бота)")
+        db["states"].pop(uid); save_db(db)
+        return
+
+    # 2. Распознавание пересланного поста (для админа)
     if message.forward_from_chat and message.forward_from_chat.username == PUBLISH_CHANNEL.replace("@", ""):
-        # Ищем в базе пост по тексту или медиа
         found = False
         for i, p in enumerate(db["posts"]):
             if p.get("text") in (message.text or message.caption or ""):
-                await message.answer(f"🔍 <b>Информация о посте:</b>\n👤 Автор: @{p['username']}\n🆔 Юзер ID: <code>{p['user_id']}</code>\n📮 Пост ID: <code>{i+1}</code>", parse_mode="HTML")
+                await message.answer(f"🔍 <b>Инфо:</b>\n👤 Автор: @{p['username']}\n🆔 ID: <code>{p['user_id']}</code>\n📮 №: <code>{i+1}</code>", parse_mode="HTML")
                 found = True; break
-        if not found: await message.answer("❌ Данные об этом посте не найдены в базе.")
+        if not found: await message.answer("❌ Пост не найден в базе.")
         return
 
     if not state: return
 
-    # 2. Обработка предложки
+    # 3. Обработка предложки
     if state == "waiting_for_post":
         kb = InlineKeyboardMarkup(inline_keyboard=[[
             InlineKeyboardButton(text="✅ Да", callback_data=f"p_acc_{uid}"),
@@ -157,8 +187,8 @@ async def main_handler(message: types.Message):
         f_id = message.photo[-1].file_id if message.photo else (message.video.file_id if message.video else None)
         f_type = "photo" if message.photo else ("video" if message.video else None)
         
-        post_entry = {"user_id": uid, "username": message.from_user.username, "text": content, "file_id": f_id, "file_type": f_type}
-        db["posts"].append(post_entry); p_id = len(db["posts"]); save_db(db)
+        db["posts"].append({"user_id": uid, "username": message.from_user.username, "text": content, "file_id": f_id, "file_type": f_type})
+        p_id = len(db["posts"]); save_db(db)
 
         for aid in ADMINS:
             info = f"👤 От: @{message.from_user.username}\n📮 Пост №: {p_id}\n\n{content}"
@@ -169,7 +199,7 @@ async def main_handler(message: types.Message):
         await message.answer("⏳ Отправлено админам!", reply_markup=get_main_kb())
         db["states"].pop(uid); save_db(db)
 
-    # 3. Обработка поддержки
+    # 4. Обработка поддержки
     elif state == "waiting_for_support":
         kb = InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="💬 Ответить", callback_data=f"sup_rep_{uid}")]])
         for aid in ADMINS:
@@ -179,56 +209,31 @@ async def main_handler(message: types.Message):
         await message.answer("🚀 Сообщение доставлено поддержке!", reply_markup=get_main_kb())
         db["states"].pop(uid); save_db(db)
 
-# --- АДМИН КОМАНДЫ ---
-@dp.message(Command("stats"), F.from_user.id.in_(ADMINS))
-async def cmd_stats(message: types.Message):
-    db = load_db()
-    await message.answer(f"📊 Статистика:\nЮзеров: {len(db['users'])}\nПостов в базе: {len(db['posts'])}")
-
-@dp.message(Command("check"), F.from_user.id.in_(ADMINS))
-async def cmd_check(message: types.Message, command: CommandObject):
-    if not command.args: return
-    db = load_db()
-    try:
-        p = db["posts"][int(command.args)-1]
-        info = f"📦 Пост №{command.args}\nАвтор: @{p['username']}\n\nТекст: {p['text']}"
-        if p["file_id"]:
-            if p["file_type"] == "photo": await bot.send_photo(message.chat.id, p["file_id"], caption=info)
-            else: await bot.send_video(message.chat.id, p["file_id"], caption=info)
-        else: await message.answer(info)
-    except: await message.answer("❌ Не найдено")
-
-@dp.message(Command("history"), F.from_user.id.in_(ADMINS))
-async def cmd_history(message: types.Message, command: CommandObject):
-    if not command.args: return
-    db = load_db()
-    uname = command.args.replace("@", "")
-    ids = [str(i+1) for i, p in enumerate(db["posts"]) if p["username"] == uname]
-    await message.answer(f"📝 Посты @{uname}: {', '.join(ids) if ids else 'нет'}")
-
-# --- ОБРАБОТКА CALLBACKS (ОТВЕТЫ И ПУБЛИКАЦИЯ) ---
-@dp.callback_query(F.data.startswith("sup_rep_"))
-async def support_reply(call: types.CallbackQuery):
-    uid = call.data.split("_")[2]
-    db = load_db()
-    db["states"][str(call.from_user.id)] = f"rep_to_{uid}"
-    save_db(db)
-    await call.message.answer(f"✍️ Пишите ответ для юзера {uid}:")
-    await call.answer()
-
+# --- МОДЕРАЦИЯ ---
 @dp.callback_query(F.data.startswith("p_"))
 async def process_post(call: types.CallbackQuery):
     _, act, t_uid = call.data.split("_")
     if act == "acc":
-        # Логика публикации в канал с синим текстом
         content = call.message.caption or call.message.text or ""
-        if "От:" in content: content = content.split("\n\n")[-1] # Убираем инфо админа
+        if "От:" in content: content = content.split("\n\n")[-1]
         
         if call.message.photo: await bot.send_photo(PUBLISH_CHANNEL, call.message.photo[-1].file_id, caption=f"{content}{FOOTER_TEXT}", parse_mode="HTML")
         elif call.message.video: await bot.send_video(PUBLISH_CHANNEL, call.message.video.file_id, caption=f"{content}{FOOTER_TEXT}", parse_mode="HTML")
         else: await bot.send_message(PUBLISH_CHANNEL, f"{content}{FOOTER_TEXT}", parse_mode="HTML", disable_web_page_preview=True)
-        await bot.send_message(int(t_uid), "🌟 Ваш пост опубликован!")
+        await bot.send_message(int(t_uid), "🌟 <b>Твой пост опубликован в канале!</b>", parse_mode="HTML")
+    else:
+        await bot.send_message(int(t_uid), "❌ <b>Твой пост был отклонен модерацией.</b>", parse_mode="HTML")
+    
     await call.message.delete_reply_markup()
+    await call.answer()
+
+@dp.callback_query(F.data.startswith("sup_rep_"))
+async def support_reply_call(call: types.CallbackQuery):
+    uid = call.data.split("_")[2]
+    db = load_db()
+    db["states"][str(call.from_user.id)] = f"rep_to_{uid}"
+    save_db(db)
+    await call.message.answer(f"✍️ Напиши сообщение для пользователя {uid}. Оно будет отправлено следующим сообщением:")
     await call.answer()
 
 async def main():
