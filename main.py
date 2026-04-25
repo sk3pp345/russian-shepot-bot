@@ -61,7 +61,7 @@ async def cmd_start(message: types.Message):
     db = load_db()
     db["users"][str(message.from_user.id)] = message.from_user.username or "NoUser"
     save_db(db)
-    await message.answer(f"Привет! Это <b>Шёпот России</b> 🤫\n\nВыбери действие в меню ниже:", reply_markup=get_main_kb(), parse_mode="HTML")
+    await message.answer(f"Привет! Это <b>Подслушано Школы 114</b> 🤫\n\nВыбери действие в меню ниже:", reply_markup=get_main_kb(), parse_mode="HTML")
 
 @dp.message(Command("admins"))
 async def cmd_admins(message: types.Message):
