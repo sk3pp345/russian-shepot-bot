@@ -11,7 +11,6 @@ from aiogram.filters import Command, CommandObject
 from aiohttp import web
 
 # --- НАСТРОЙКИ ---
-# --- НАСТРОЙКИ ---
 logging.basicConfig(level=logging.INFO)
 TOKEN = os.getenv("BOT_TOKEN")
 PUBLISH_CHANNEL = "@dnipro1777" 
@@ -21,8 +20,9 @@ bot = Bot(token=TOKEN)
 dp = Dispatcher()
 DB_FILE = "database_ru.json"
 
-# Возвращаем название FOOTER_TEXT, чтобы не менять остальной код
+# Подпись, которая будет добавляться к каждому посту
 FOOTER_TEXT = "\n\n<b><a href='https://t.me/Info114Pod'>ℹ️ Инфо</a> | <a href='https://t.me/+W65-IzDXhT85ZTky'>💬 Чат</a> | <a href='https://t.me/shkola_114_bot'>🤖 Предложка</a> | <a href='https://t.me/Per114Pod'>🔗 Переходник</a></b>"
+
 # --- РАБОТА С БД ---
 def load_db():
     if os.path.exists(DB_FILE):
@@ -66,7 +66,6 @@ async def cmd_start(message: types.Message):
 
 @dp.message(Command("admins"))
 async def cmd_admins(message: types.Message):
-    # Обновленный текст админ-панели
     admin_text = (
         "🛠 <b>Админ-панель</b>\n\n"
         "<b>/stats</b> — Статистика (юзеры и посты)\n"
@@ -235,13 +234,14 @@ async def process_post(call: types.CallbackQuery):
     p_idx = int(p_id)-1
     post = db["posts"][p_idx]
     
- if act == "acc":
-    if post["file_type"] == "photo": 
-        await bot.send_photo(PUBLISH_CHANNEL, post["file_id"], caption=f"{post['text']}{FOOTER_TEXT}", parse_mode="HTML")
-    elif post["file_type"] == "video": 
-        await bot.send_video(PUBLISH_CHANNEL, post["file_id"], caption=f"{post['text']}{FOOTER_TEXT}", parse_mode="HTML")
-    else: 
-        await bot.send_message(PUBLISH_CHANNEL, f"{post['text']}{FOOTER_TEXT}", parse_mode="HTML", disable_web_page_preview=True)
+    if act == "acc":
+        if post["file_type"] == "photo": 
+            await bot.send_photo(PUBLISH_CHANNEL, post["file_id"], caption=f"{post['text']}{FOOTER_TEXT}", parse_mode="HTML")
+        elif post["file_type"] == "video": 
+            await bot.send_video(PUBLISH_CHANNEL, post["file_id"], caption=f"{post['text']}{FOOTER_TEXT}", parse_mode="HTML")
+        else: 
+            await bot.send_message(PUBLISH_CHANNEL, f"{post['text']}{FOOTER_TEXT}", parse_mode="HTML", disable_web_page_preview=True)
+        
         await bot.send_message(int(post["user_id"]), "🌟 Твой пост опубликован!")
         res_text = "✅ Одобрено"
     else:
@@ -268,4 +268,5 @@ async def main():
     asyncio.create_task(start_server())
     await dp.start_polling(bot)
 
-if __name__ == "__main__": asyncio.run(main())
+if __name__ == "__main__":
+    asyncio.run(main())
