@@ -21,7 +21,7 @@ dp = Dispatcher()
 DB_FILE = "database_ru.json"
 
 # Синий текст под постами
-FOOTER_TEXT = "\n\n<b><a href='https://t.me/shepotrussiabot'>Предложка (@shepotrussiabot)</a>\n<a href='https://t.me/shepotrussia'>Шёпот России (t.me/shepotrussia)</a>\n<a href='https://t.me/+SSbibEaewjZiMGQy'>Чат</a></b>"
+FOOTER_TEXT = "\n\n<b><a href='https://t.me/shepotrussiabot'>Предложка (@shepotrussiabot)</a>\n<a href='https://t.me/shepotrussia'>Шёпот России (t.me/shepotrussia)</a>\n<a href='https://t.me/shepotrussiachat'>Чат</a></b>"
 
 # --- РАБОТА С БД ---
 def load_db():
