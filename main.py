@@ -54,25 +54,25 @@ def get_back_kb():
 async def cmd_start(m: types.Message):
     db = load_db()
     db["users"][str(m.from_user.id)] = m.from_user.username or "User"
-    db["states"].pop(str(m.from_user.id), None) # Сброс состояния при старте
+    db["states"].pop(str(m.from_user.id), None) 
     save_db(db)
     await m.answer("Привіт! Выбери действие на кнопках ниже:", reply_markup=get_main_kb())
 
 @dp.message(Command("reply"), F.from_user.id.in_(ADMINS))
 async def cmd_reply(m: types.Message, command: CommandObject):
     if not command.args or " " not in command.args:
-        return await m.answer("Ошибка! Пиши так: /reply ID Текст (или ответь на медиа этой командой)")
+        return await m.answer("Пиши: /reply ID Текст")
     
     uid, text = command.args.split(" ", 1)
     try:
-        # Если админ отвечает на фото/видео командой /reply
+        # Если админ отвечает на сообщение с фото/видео через reply
         if m.reply_to_message:
             await m.reply_to_message.copy_to(uid, caption=f"🔔 <b>Ответ поддержки:</b>\n\n{text}", parse_mode="HTML")
         else:
             await bot.send_message(uid, f"🔔 <b>Ответ поддержки:</b>\n\n{text}", parse_mode="HTML")
         await m.answer("✅ Ответ отправлен!")
-    except:
-        await m.answer("❌ Не удалось отправить. Возможно, юзер заблокировал бота.")
+    except Exception as e:
+        await m.answer(f"❌ Ошибка: {e}")
 
 # --- ЛОГИКА КНОПОК ---
 @dp.message(F.text == "⬅️ Назад")
@@ -87,44 +87,43 @@ async def support_start(m: types.Message):
     db = load_db()
     db["states"][str(m.from_user.id)] = "support"
     save_db(db)
-    await m.answer("Режим поддержки включен. Пришли текст, фото или видео — админы их получат.", reply_markup=get_back_kb())
+    await m.answer("Режим поддержки. Пришли текст или ФОТО — админы получат всё.", reply_markup=get_back_kb())
 
 @dp.message(F.text == "📝 Предложить пост")
 async def post_start(m: types.Message):
     db = load_db()
     db["states"][str(m.from_user.id)] = "post"
     save_db(db)
-    await m.answer("Режим предложки. Пришли свой пост (текст, фото или видео):", reply_markup=get_back_kb())
+    await m.answer("Режим предложки. Жду твой пост (текст, фото или видео):", reply_markup=get_back_kb())
 
-# --- ЕДИНЫЙ ОБРАБОТЧИК МЕДИА И ТЕКСТА ---
+# --- ОБРАБОТЧИК ВСЕГО (МЕДИА И ТЕКСТ) ---
 @dp.message()
-async def universal_handler(m: types.Message):
+async def main_handler(m: types.Message):
     uid = str(m.from_user.id)
     db = load_db()
     state = db["states"].get(uid)
 
-    # 1. Если человек НЕ выбрал действие — ничего не пересылаем
+    # Если действие не выбрано - игнорируем
     if not state:
         if m.chat.type == "private":
-            await m.answer("⚠️ Пожалуйста, сначала выбери действие на кнопках ниже!", reply_markup=get_main_kb())
+            await m.answer("⚠️ Выбери кнопку: Предложить пост или Поддержка.")
         return
 
-    # 2. Логика ПОДДЕРЖКИ (текст + медиа)
+    # ПОДДЕРЖКА
     if state == "support":
         for aid in ADMINS:
-            try:
-                # Пересылаем сообщение админам с кнопкой ответа
-                kb = InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="Ответить", callback_data=f"ans_{uid}")]])
-                await m.send_copy(aid, reply_markup=kb)
-            except: pass
-        await m.answer("✅ Сообщение в поддержу отправлено!", reply_markup=get_main_kb())
+            kb = InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="Ответить", callback_data=f"ans_{uid}")]])
+            # Используем copy_to для сохранения всех типов медиа
+            await m.copy_to(aid, reply_markup=kb)
+        
+        await m.answer("✅ Отправлено админам!", reply_markup=get_main_kb())
         db["states"].pop(uid, None)
         save_db(db)
 
-    # 3. Логика ПРЕДЛОЖКИ (текст + медиа)
+    # ПРЕДЛОЖКА
     elif state == "post":
         p_id = len(db["posts"]) + 1
-        db["posts"].append({"user_id": uid, "username": m.from_user.username, "admin_msgs": []})
+        db["posts"].append({"user_id": uid, "admin_msgs": []})
         
         kb = InlineKeyboardMarkup(inline_keyboard=[[
             InlineKeyboardButton(text="✅ Опубликовать", callback_data=f"acc_{p_id}"), 
@@ -132,52 +131,46 @@ async def universal_handler(m: types.Message):
         ]])
         
         for aid in ADMINS:
-            try:
-                # Админ получает копию поста с кнопками
-                cap = f"👤 @{m.from_user.username} | Пост №{p_id}\n\n{m.caption or m.text or ''}"
-                res = await m.send_copy(aid, caption=cap, reply_markup=kb)
-                db["posts"][-1]["admin_msgs"].append({"chat": aid, "id": res.message_id})
-            except: pass
+            cap = f"👤 @{m.from_user.username} | Пост №{p_id}\n\n{m.caption or m.text or ''}"
+            # Копируем само сообщение, чтобы сохранить медиа
+            res = await m.copy_to(aid, caption=cap, reply_markup=kb)
+            db["posts"][-1]["admin_msgs"].append({"chat": aid, "id": res.message_id})
             
-        save_db(db)
-        await m.answer("📩 Пост отправлен на модерацию!", reply_markup=get_main_kb())
+        await m.answer("📩 Пост на модерации!", reply_markup=get_main_kb())
         db["states"].pop(uid, None)
         save_db(db)
 
-# --- ОБРАБОТКА CALLBACK ---
+# --- МОДЕРАЦИЯ ---
 @dp.callback_query(F.data.startswith("acc_") | F.data.startswith("rej_"))
 async def moderation_handler(c: types.CallbackQuery):
     act, p_id = c.data.split("_")[0], int(c.data.split("_")[1])
     db = load_db()
     
-    # Ищем пост в базе
     try:
         p_data = db["posts"][p_id-1]
-        user_id = p_data["user_id"]
-    except:
-        return await c.answer("Ошибка: пост не найден")
+        u_id = p_data["user_id"]
+    except: return await c.answer("Пост не найден.")
 
     if act == "acc":
-        # Публикация (копируем сообщение из оригинала или пересылаем)
-        await c.message.copy_to(PUBLISH_CHANNEL, caption=(c.message.caption or "") + FOOTER_TEXT, reply_markup=None)
-        await bot.send_message(user_id, "🌟 Твой пост опубликован в канале!")
+        new_cap = (c.message.caption or "").split("\n\n")[1:] # Убираем инфо об админе
+        final_cap = "\n".join(new_cap) + FOOTER_TEXT
+        await c.message.copy_to(PUBLISH_CHANNEL, caption=final_cap)
+        await bot.send_message(u_id, "🌟 Твой пост опубликован!")
     else:
-        await bot.send_message(user_id, "🚫 Твой пост отклонен модератором.")
+        await bot.send_message(u_id, "🚫 Твой пост отклонен.")
 
-    # Убираем кнопки у всех админов
-    for m in p_data.get("admin_msgs", []):
-        try: await bot.edit_message_reply_markup(chat_id=m["chat"], message_id=m["id"], reply_markup=None)
+    for amsg in p_data.get("admin_msgs", []):
+        try: await bot.edit_message_reply_markup(chat_id=amsg["chat"], message_id=amsg["id"], reply_markup=None)
         except: pass
-    
-    await c.answer("Выполнено")
+    await c.answer("Готово")
 
 @dp.callback_query(F.data.startswith("ans_"))
 async def setup_reply(c: types.CallbackQuery):
     uid = c.data.split("_")[1]
-    await c.message.answer(f"Чтобы ответить юзеру, напиши:\n<code>/reply {uid} Текст</code>", parse_mode="HTML")
+    await c.message.answer(f"Команда для ответа:\n<code>/reply {uid} Твой текст</code>", parse_mode="HTML")
     await c.answer()
 
-# --- ЗАПУСК ---
+# --- ВЕБ-СЕРВЕР ---
 async def start_web():
     app = web.Application()
     app.router.add_get('/', lambda r: web.Response(text="OK"))
@@ -186,7 +179,7 @@ async def start_web():
     await web.TCPSite(runner, '0.0.0.0', int(os.getenv("PORT", 10000))).start()
 
 async def main():
-    await bot.delete_webhook(drop_pending_updates=True)
+    await bot.delete_webhook(drop_pending_updates=True) # Очистка зависших сообщений
     asyncio.create_task(start_web())
     await dp.start_polling(bot)
 
