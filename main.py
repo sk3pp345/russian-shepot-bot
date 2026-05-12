@@ -64,7 +64,7 @@ async def start_web():
     await runner.setup()
     await web.TCPSite(runner, '0.0.0.0', int(os.getenv("PORT", 10000))).start()
 
-# --- КОМАНДЫ (С ПРИОРИТЕТОМ) ---
+# --- КОМАНДЫ (ПРИОРИТЕТ 1) ---
 @dp.message(Command("start"))
 async def cmd_start(m: types.Message):
     db = load_db()
@@ -74,7 +74,7 @@ async def cmd_start(m: types.Message):
 
 @dp.message(Command("admins"), F.from_user.id.in_(ADMINS))
 async def cmd_admins(m: types.Message):
-    await m.answer("🛠 <b>Команды:</b>\n/stats - Статистика\n/check ID - Инфо о посте", parse_mode="HTML")
+    await m.answer("🛠 <b>Команды:</b>\n/stats - Статистика\n/reply ID Текст - Ответ", parse_mode="HTML")
 
 @dp.message(Command("stats"), F.from_user.id.in_(ADMINS))
 async def cmd_stats(m: types.Message):
@@ -88,10 +88,10 @@ async def cmd_reply(m: types.Message, command: CommandObject):
     uid, text = command.args.split(" ", 1)
     try:
         await bot.send_message(uid, f"🔔 <b>Ответ от поддержки:</b>\n\n{text}", parse_mode="HTML")
-        await m.answer("✅ Ответ отправлен!")
-    except: await m.answer("❌ Ошибка отправки.")
+        await m.answer("✅ Ответ отправлен пользователю!")
+    except: await m.answer("❌ Не удалось отправить ответ.")
 
-# --- ЛОГИКА СОСТОЯНИЙ ---
+# --- ЛОГИКА КНОПОК ---
 @dp.message(F.text == "⬅️ Назад")
 async def go_back(m: types.Message):
     db = load_db()
@@ -111,9 +111,9 @@ async def post_start(m: types.Message):
     db = load_db()
     db["states"][str(m.from_user.id)] = "post"
     save_db(db)
-    await m.answer("Пришли контент твоего поста:", reply_markup=get_back_kb())
+    await m.answer("Пришли текст, фото или видео для канала:", reply_markup=get_back_kb())
 
-# --- ОБЩИЙ ОБРАБОТЧИК ---
+# --- ОБРАБОТЧИК СООБЩЕНИЙ ---
 @dp.message()
 async def main_handler(m: types.Message):
     uid = str(m.from_user.id)
@@ -121,7 +121,7 @@ async def main_handler(m: types.Message):
     state = db["states"].get(uid)
 
     if state == "support":
-        content = m.text or m.caption or "[Медиа]"
+        content = m.text or m.caption or "[Медиа-сообщение]"
         for aid in ADMINS:
             kb = InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="Ответить", callback_data=f"ans_{uid}")]])
             await bot.send_message(aid, f"🆘 <b>Вопрос от @{m.from_user.username}:</b>\n\n{content}", reply_markup=kb, parse_mode="HTML")
@@ -140,19 +140,19 @@ async def main_handler(m: types.Message):
         db["states"].pop(uid, None)
         
         kb = InlineKeyboardMarkup(inline_keyboard=[[
-            InlineKeyboardButton(text="✅", callback_data=f"acc_{p_id}"), 
-            InlineKeyboardButton(text="❌", callback_data=f"rej_{p_id}")
+            InlineKeyboardButton(text="✅ Опубликовать", callback_data=f"acc_{p_id}"), 
+            InlineKeyboardButton(text="❌ Отклонить", callback_data=f"rej_{p_id}")
         ]])
         
         for aid in ADMINS:
-            cap = f"👤 @{m.from_user.username}\n📮 №{p_id}\n\n{txt}"
+            cap = f"👤 @{m.from_user.username}\n📮 Пост №{p_id}\n\n{txt}"
             if f_type == "photo": res = await bot.send_photo(aid, f_id, caption=cap, reply_markup=kb)
             elif f_type == "video": res = await bot.send_video(aid, f_id, caption=cap, reply_markup=kb)
             else: res = await bot.send_message(aid, cap, reply_markup=kb)
             db["posts"][-1]["admin_msgs"].append({"chat": aid, "id": res.message_id})
         
         save_db(db)
-        await m.answer("📩 <b>Ваш пост отправлен на модерацию!</b> Ожидайте уведомления.", reply_markup=get_main_kb(), parse_mode="HTML")
+        await m.answer("📩 <b>Твой пост отправлен на модерацию!</b>", reply_markup=get_main_kb(), parse_mode="HTML")
         return
 
 # --- МОДЕРАЦИЯ ---
@@ -167,9 +167,9 @@ async def moderation_handler(c: types.CallbackQuery):
         if p["file_type"] == "photo": await bot.send_photo(PUBLISH_CHANNEL, p["file_id"], caption=cap, parse_mode="HTML")
         elif p["file_type"] == "video": await bot.send_video(PUBLISH_CHANNEL, p["file_id"], caption=cap, parse_mode="HTML")
         else: await bot.send_message(PUBLISH_CHANNEL, cap, parse_mode="HTML")
-        await bot.send_message(p["user_id"], "🌟 <b>Ваш пост одобрен и опубликован!</b>", parse_mode="HTML")
+        await bot.send_message(p["user_id"], "🌟 <b>Твой пост одобрен и опубликован!</b>", parse_mode="HTML")
     else:
-        await bot.send_message(p["user_id"], "🚫 <b>Ваш пост был отклонен модерацией.</b>", parse_mode="HTML")
+        await bot.send_message(p["user_id"], "🚫 <b>К сожалению, твой пост отклонен.</b>", parse_mode="HTML")
 
     for m in p.get("admin_msgs", []):
         try: await bot.edit_message_reply_markup(chat_id=m["chat"], message_id=m["id"], reply_markup=None)
@@ -179,10 +179,12 @@ async def moderation_handler(c: types.CallbackQuery):
 @dp.callback_query(F.data.startswith("ans_"))
 async def setup_reply(c: types.CallbackQuery):
     uid = c.data.split("_")[1]
-    await c.message.answer(f"Используй: <code>/reply {uid} Текст</code>", parse_mode="HTML")
+    await c.message.answer(f"Чтобы ответить, введи:\n<code>/reply {uid} Твой ответ</code>", parse_mode="HTML")
     await c.answer()
 
 async def main():
+    # Очистка очереди (чтобы не было Conflict Error как на скриншоте)
+    await bot.delete_webhook(drop_pending_updates=True)
     asyncio.create_task(start_web())
     await dp.start_polling(bot)
 
