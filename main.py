@@ -33,7 +33,7 @@ FOOTER_TEXT = (
 bot = Bot(token=TOKEN)
 dp = Dispatcher()
 
-# --- РАБОТА С БД ---
+# --- БАЗА ДАННЫХ ---
 def load_db():
     if os.path.exists(DB_FILE):
         try:
@@ -56,7 +56,7 @@ def get_main_kb():
 def get_back_kb():
     return ReplyKeyboardMarkup(keyboard=[[KeyboardButton(text="⬅️ Назад")]], resize_keyboard=True)
 
-# --- WEB СЕРВЕР (ДЛЯ RENDER) ---
+# --- WEB СЕРВЕР ---
 async def start_web():
     app = web.Application()
     app.router.add_get('/', lambda r: web.Response(text="OK"))
@@ -64,58 +64,7 @@ async def start_web():
     await runner.setup()
     await web.TCPSite(runner, '0.0.0.0', int(os.getenv("PORT", 10000))).start()
 
-# --- АДМИНСКИЕ КОМАНДЫ ---
-@dp.message(Command("admins"), F.from_user.id.in_(ADMINS))
-async def cmd_admins(m: types.Message):
-    text = (
-        "🛠 <b>Админ-панель</b>\n\n"
-        "• <code>/stats</code> — Статистика\n"
-        "• <code>/check [ID]</code> — Инфо о посте\n"
-        "• <code>/send [Текст]</code> — Рассылка\n"
-        "• <code>/reply [ID] [Текст]</code> — Ответ в поддержку"
-    )
-    await m.answer(text, parse_mode="HTML")
-
-@dp.message(Command("stats"), F.from_user.id.in_(ADMINS))
-async def cmd_stats(m: types.Message):
-    db = load_db()
-    await m.answer(f"📊 Юзеров: {len(db['users'])}\n📮 Постов: {len(db['posts'])}")
-
-@dp.message(Command("send"), F.from_user.id.in_(ADMINS))
-async def cmd_send(m: types.Message, command: CommandObject):
-    if not command.args: return await m.answer("Введите текст рассылки")
-    db = load_db()
-    count = 0
-    for uid in db["users"]:
-        try:
-            await bot.send_message(uid, command.args)
-            count += 1
-            await asyncio.sleep(0.05)
-        except: pass
-    await m.answer(f"✅ Рассылка завершена. Получили: {count}")
-
-@dp.message(Command("check"), F.from_user.id.in_(ADMINS))
-async def cmd_check(m: types.Message, command: CommandObject):
-    if not command.args: return await m.answer("Укажите номер поста")
-    db = load_db()
-    try:
-        p = db["posts"][int(command.args)-1]
-        await m.answer(f"👤 Автор: @{p['username']}\n🆔 ID: {p['user_id']}\n📝 Текст: {p['text']}")
-    except: await m.answer("Пост не найден")
-
-# Поиск автора по пересылке
-@dp.message(F.forward_from_chat)
-async def handle_forward(m: types.Message):
-    if m.from_user.id not in ADMINS: return
-    db = load_db()
-    txt = (m.caption or m.text or "").replace(FOOTER_TEXT, "").strip()
-    found = next(((i+1, p) for i, p in enumerate(db["posts"]) if txt and (p["text"] in txt or txt in p["text"])), None)
-    if found:
-        await m.reply(f"🎯 Пост №{found[0]}\n👤 Автор: @{found[1]['username']}\n🆔 ID: <code>{found[1]['user_id']}</code>", parse_mode="HTML")
-    else:
-        await m.reply("❌ В базе предложки не найдено")
-
-# --- ЛОГИКА БОТА ---
+# --- КОМАНДЫ (С ПРИОРИТЕТОМ) ---
 @dp.message(Command("start"))
 async def cmd_start(m: types.Message):
     db = load_db()
@@ -123,106 +72,116 @@ async def cmd_start(m: types.Message):
     save_db(db)
     await m.answer("Привет! Это Предложка 114 🤫", reply_markup=get_main_kb())
 
-@dp.message(F.text == "🆘 Поддержка")
-async def support_btn(m: types.Message):
-    db = load_db()
-    db["states"][str(m.from_user.id)] = "waiting_support"
-    save_db(db)
-    await m.answer("Напиши свой вопрос, и админы ответят тебе здесь:", reply_markup=get_back_kb())
+@dp.message(Command("admins"), F.from_user.id.in_(ADMINS))
+async def cmd_admins(m: types.Message):
+    await m.answer("🛠 <b>Команды:</b>\n/stats - Статистика\n/check ID - Инфо о посте", parse_mode="HTML")
 
-@dp.message(F.text == "📝 Предложить пост")
-async def post_btn(m: types.Message):
+@dp.message(Command("stats"), F.from_user.id.in_(ADMINS))
+async def cmd_stats(m: types.Message):
     db = load_db()
-    db["states"][str(m.from_user.id)] = "waiting_post"
-    save_db(db)
-    await m.answer("Пришли текст, фото или видео для канала:", reply_markup=get_back_kb())
+    await m.answer(f"📊 Юзеров: {len(db['users'])}\n📮 Постов: {len(db['posts'])}")
 
+@dp.message(Command("reply"), F.from_user.id.in_(ADMINS))
+async def cmd_reply(m: types.Message, command: CommandObject):
+    if not command.args or " " not in command.args:
+        return await m.answer("Формат: /reply ID Текст")
+    uid, text = command.args.split(" ", 1)
+    try:
+        await bot.send_message(uid, f"🔔 <b>Ответ от поддержки:</b>\n\n{text}", parse_mode="HTML")
+        await m.answer("✅ Ответ отправлен!")
+    except: await m.answer("❌ Ошибка отправки.")
+
+# --- ЛОГИКА СОСТОЯНИЙ ---
 @dp.message(F.text == "⬅️ Назад")
-async def back_btn(m: types.Message):
+async def go_back(m: types.Message):
     db = load_db()
     db["states"].pop(str(m.from_user.id), None)
     save_db(db)
     await m.answer("Главное меню:", reply_markup=get_main_kb())
 
+@dp.message(F.text == "🆘 Поддержка")
+async def support_start(m: types.Message):
+    db = load_db()
+    db["states"][str(m.from_user.id)] = "support"
+    save_db(db)
+    await m.answer("Напиши свой вопрос, и админы ответят тебе здесь:", reply_markup=get_back_kb())
+
+@dp.message(F.text == "📝 Предложить пост")
+async def post_start(m: types.Message):
+    db = load_db()
+    db["states"][str(m.from_user.id)] = "post"
+    save_db(db)
+    await m.answer("Пришли контент твоего поста:", reply_markup=get_back_kb())
+
+# --- ОБЩИЙ ОБРАБОТЧИК ---
 @dp.message()
-async def global_handler(m: types.Message):
+async def main_handler(m: types.Message):
     uid = str(m.from_user.id)
     db = load_db()
     state = db["states"].get(uid)
 
-    if not state: return
-
-    # ИСПРАВЛЕНИЕ "NONE" В ПОДДЕРЖКЕ
-    if state == "waiting_support":
-        msg_text = m.text or m.caption or "[Медиа без текста]"
+    if state == "support":
+        content = m.text or m.caption or "[Медиа]"
         for aid in ADMINS:
-            kb = InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="💬 Ответить", callback_data=f"ans_{uid}")]])
-            await bot.send_message(aid, f"🆘 <b>Вопрос от @{m.from_user.username}:</b>\n\n{msg_text}", reply_markup=kb, parse_mode="HTML")
+            kb = InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="Ответить", callback_data=f"ans_{uid}")]])
+            await bot.send_message(aid, f"🆘 <b>Вопрос от @{m.from_user.username}:</b>\n\n{content}", reply_markup=kb, parse_mode="HTML")
         db["states"].pop(uid, None)
         save_db(db)
-        return await m.answer("✅ Твой вопрос отправлен админам!", reply_markup=get_main_kb())
+        await m.answer("✅ <b>Твой вопрос отправлен!</b> Админы скоро ответят.", reply_markup=get_main_kb(), parse_mode="HTML")
+        return
 
-    if state == "waiting_post":
+    if state == "post":
+        txt = m.caption or m.text or ""
         f_id = m.photo[-1].file_id if m.photo else (m.video.file_id if m.video else None)
         f_type = "photo" if m.photo else ("video" if m.video else None)
-        txt = m.caption or m.text or ""
         
         db["posts"].append({"user_id": uid, "username": m.from_user.username, "text": txt, "file_id": f_id, "file_type": f_type, "admin_msgs": []})
         p_id = len(db["posts"])
         db["states"].pop(uid, None)
-        save_db(db)
-
+        
         kb = InlineKeyboardMarkup(inline_keyboard=[[
-            InlineKeyboardButton(text="✅ Опубликовать", callback_data=f"acc_{p_id}"),
-            InlineKeyboardButton(text="❌ Отклонить", callback_data=f"rej_{p_id}")
+            InlineKeyboardButton(text="✅", callback_data=f"acc_{p_id}"), 
+            InlineKeyboardButton(text="❌", callback_data=f"rej_{p_id}")
         ]])
-
+        
         for aid in ADMINS:
-            cap = f"👤 @{m.from_user.username}\n📮 Пост №{p_id}\n\n{txt}"
+            cap = f"👤 @{m.from_user.username}\n📮 №{p_id}\n\n{txt}"
             if f_type == "photo": res = await bot.send_photo(aid, f_id, caption=cap, reply_markup=kb)
             elif f_type == "video": res = await bot.send_video(aid, f_id, caption=cap, reply_markup=kb)
             else: res = await bot.send_message(aid, cap, reply_markup=kb)
             db["posts"][-1]["admin_msgs"].append({"chat": aid, "id": res.message_id})
         
         save_db(db)
-        await m.answer("🚀 Пост отправлен на модерацию!", reply_markup=get_main_kb())
+        await m.answer("📩 <b>Ваш пост отправлен на модерацию!</b> Ожидайте уведомления.", reply_markup=get_main_kb(), parse_mode="HTML")
+        return
 
-# --- ОБРАБОТКА CALLBACK ---
+# --- МОДЕРАЦИЯ ---
 @dp.callback_query(F.data.startswith("acc_") | F.data.startswith("rej_"))
-async def handle_mod(c: types.CallbackQuery):
+async def moderation_handler(c: types.CallbackQuery):
     act, p_id = c.data.split("_")[0], int(c.data.split("_")[1])
     db = load_db()
     p = db["posts"][p_id-1]
     
     if act == "acc":
-        final_cap = f"{p['text']}{FOOTER_TEXT}"
-        if p["file_type"] == "photo": await bot.send_photo(PUBLISH_CHANNEL, p["file_id"], caption=final_cap, parse_mode="HTML")
-        elif p["file_type"] == "video": await bot.send_video(PUBLISH_CHANNEL, p["file_id"], caption=final_cap, parse_mode="HTML")
-        else: await bot.send_message(PUBLISH_CHANNEL, final_cap, parse_mode="HTML")
-        await bot.send_message(p["user_id"], "🎉 Твой пост опубликован!")
-    
-    for am in p["admin_msgs"]:
-        try: await bot.edit_message_reply_markup(chat_id=am["chat"], message_id=am["id"], reply_markup=None)
+        cap = f"{p['text']}{FOOTER_TEXT}"
+        if p["file_type"] == "photo": await bot.send_photo(PUBLISH_CHANNEL, p["file_id"], caption=cap, parse_mode="HTML")
+        elif p["file_type"] == "video": await bot.send_video(PUBLISH_CHANNEL, p["file_id"], caption=cap, parse_mode="HTML")
+        else: await bot.send_message(PUBLISH_CHANNEL, cap, parse_mode="HTML")
+        await bot.send_message(p["user_id"], "🌟 <b>Ваш пост одобрен и опубликован!</b>", parse_mode="HTML")
+    else:
+        await bot.send_message(p["user_id"], "🚫 <b>Ваш пост был отклонен модерацией.</b>", parse_mode="HTML")
+
+    for m in p.get("admin_msgs", []):
+        try: await bot.edit_message_reply_markup(chat_id=m["chat"], message_id=m["id"], reply_markup=None)
         except: pass
-    await c.answer("Выполнено")
+    await c.answer("Готово")
 
 @dp.callback_query(F.data.startswith("ans_"))
-async def handle_ans(c: types.CallbackQuery):
+async def setup_reply(c: types.CallbackQuery):
     uid = c.data.split("_")[1]
-    await c.message.answer(f"Скопируй и ответь:\n<code>/reply {uid} ТЕКСТ</code>", parse_mode="HTML")
+    await c.message.answer(f"Используй: <code>/reply {uid} Текст</code>", parse_mode="HTML")
     await c.answer()
 
-@dp.message(Command("reply"), F.from_user.id.in_(ADMINS))
-async def cmd_reply(m: types.Message, command: CommandObject):
-    if not command.args or " " not in command.args: 
-        return await m.answer("Формат: /reply ID Текст")
-    uid, text = command.args.split(" ", 1)
-    try:
-        await bot.send_message(uid, f"🆘 <b>Ответ поддержки:</b>\n\n{text}", parse_mode="HTML")
-        await m.answer("✅ Ответ отправлен пользователю!")
-    except: await m.answer("❌ Ошибка отправки")
-
-# --- ЗАПУСК ---
 async def main():
     asyncio.create_task(start_web())
     await dp.start_polling(bot)
